@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+
+id = "ai_deepseek_text_editor"
+version = "1.0.0"
+name = "Autocomplete Deepseek - Text Editor with AI"
+tagline = "Autocomplete Deepseek - Text Editor with AI"
+maintainer = "Jer NC"
+type = "add-on"
+
+website = "https://example.com or GitHub repository"
+
+tags = [
+    "Text Editor"
+]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]

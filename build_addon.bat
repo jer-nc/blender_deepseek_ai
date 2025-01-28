@@ -1,0 +1,1 @@
+"C:\Program Files\Blender Foundation\Blender 4.2\blender.exe" -c extension build --source-dir=./source
