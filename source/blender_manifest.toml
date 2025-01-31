@@ -1,13 +1,13 @@
 schema_version = "1.0.0"
 
 id = "ai_deepseek_text_editor"
-version = "1.0.0"
+version = "1.0.2"
 name = "Autocomplete Deepseek - Text Editor with AI"
 tagline = "Autocomplete Deepseek - Text Editor with AI"
 maintainer = "Jer NC"
 type = "add-on"
 
-website = "https://example.com or GitHub repository"
+website = "https://github.com/jer-nc/blender_deepseek_ai"
 
 tags = [
     "Text Editor"
