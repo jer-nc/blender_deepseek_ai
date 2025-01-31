@@ -16,6 +16,9 @@ DEFAULT_PROMPT = (
     "'''\n"
     "{code_context}\n"
     "'''\n\n"
+    "'''\n"
+    "{scene_context}\n"
+    "'''\n\n"
     "New request: "
 )
 DEFAULT_ERROR_PROMPT = (
