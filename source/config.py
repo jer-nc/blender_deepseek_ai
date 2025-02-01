@@ -1,5 +1,6 @@
 DEFAULT_API_URL = "https://api.deepseek.com/chat/completions"
 DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL_FIX_ERRORS = "deepseek-chat"
 DEFAULT_MAX_TOKENS = 8000
 DEFAULT_TEMPERATURE = 0.5
 DEFAULT_TOP_P = 0.95
@@ -15,6 +16,9 @@ DEFAULT_PROMPT = (
     "Current context:\n"
     "'''\n"
     "{code_context}\n"
+    "'''\n\n"
+    "'''\n"
+    "{scene_context}\n"
     "'''\n\n"
     "New request: "
 )

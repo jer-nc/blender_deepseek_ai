@@ -22,6 +22,12 @@ class DeepSeekProperties:
         description="AI model to use",
         default=DEFAULT_MODEL
     )
+
+    model_name_fix_errors: bpy.props.StringProperty(
+        name="Model Fix Errors",
+        description="AI model to use for error correction",
+        default=DEFAULT_MODEL_FIX_ERRORS
+    )
     
     max_tokens: bpy.props.IntProperty(
         name="Max Tokens",

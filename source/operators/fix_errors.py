@@ -4,59 +4,64 @@ import io
 import re
 import traceback
 import requests
+import threading
+from queue import Queue
 from bpy.types import Operator
 
 class DEEPSEEK_OT_FixErrors(Operator):
     bl_idname = "text.deepseek_fix_errors"
     bl_label = "DeepSeek Fix Errors"
-    bl_description = "Fix Python errors using AI, this will execute the code and send the error to DeepSeek"
+    bl_description = "Fix Python errors using AI with real-time updates"
     
-    def execute(self, context):
-        # prefs = context.preferences.addons[__name__].preferences
-        addon_path = '.'.join(__name__.split('.')[:-2]) 
-        print("Addon path without 'operators.fix_errors':", addon_path)
-        prefs = context.preferences.addons[addon_path].preferences
+    _timer = None
+    data_queue = Queue()
+    is_running = False
+    original_text = ""
+    error_data = {}
+    
+    def execute_code(self, context):
         text_block = context.space_data.text
-        
-        # Capture the code and execute it
         code = text_block.as_string()
+        
         old_stdout, old_stderr = sys.stdout, sys.stderr
         output_buffer = io.StringIO()
-        
         sys.stdout = sys.stderr = output_buffer
-        error_occurred = False
-        error_msg = ""
         
         try:
             namespace = {'__name__': '__main__', 'bpy': bpy}
             exec(code, namespace)
+            error_occurred = False
         except Exception as e:
             error_occurred = True
-            error_msg = str(e)
             traceback.print_exc(file=output_buffer)
+            self.error_data = {
+                "message": str(e),
+                "traceback": output_buffer.getvalue(),
+                "code": code
+            }
         finally:
             sys.stdout, sys.stderr = old_stdout, old_stderr
+            output_buffer.close()
         
-        console_output = output_buffer.getvalue()
-        output_buffer.close()
-        
-        if not error_occurred:
-            self.report({'INFO'}, "Errors not detected")
-            return {'FINISHED'}
-        
-        # Send the error to DeepSeek
-        prompt = prefs.error_prompt.format(
-            code=code,
-            error=error_msg,
-            console_output=console_output
-        )
-        
+        return error_occurred
+
+    def send_to_deepseek(self, context):
+        """Thread for sending code to DeepSeek API"""
         try:
+            addon_path = '.'.join(__name__.split('.')[:-2])
+            prefs = context.preferences.addons[addon_path].preferences
+            
+            prompt = prefs.error_prompt.format(
+                code=self.error_data["code"],
+                error=self.error_data["message"],
+                console_output=self.error_data["traceback"]
+            )
+            
             response = requests.post(
                 prefs.api_url,
                 headers={"Authorization": f"Bearer {prefs.api_key}"},
                 json={
-                    "model": prefs.model_name,
+                    "model": prefs.model_name_fix_errors,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": prefs.temperature,
                     "top_p": prefs.top_p,
@@ -69,13 +74,59 @@ class DEEPSEEK_OT_FixErrors(Operator):
             
             if response.status_code == 200:
                 corrected_code = self.clean_response(response.json()["choices"][0]["message"]["content"])
-                text_block.clear()
-                text_block.write(corrected_code)
-                self.report({'INFO'}, "Errors fixed successfully")
+                self.data_queue.put(('SUCCESS', corrected_code))
+            else:
+                self.data_queue.put(('ERROR', f"API Error: {response.status_code}"))
+                
         except Exception as e:
-            self.report({'ERROR'}, f"Error: {str(e)}")
+            self.data_queue.put(('ERROR', str(e)))
+        finally:
+            self.is_running = False
+
+    def modal(self, context, event):
+        """Update UI and handle responses"""
+        if event.type == 'TIMER':
+            while not self.data_queue.empty():
+                status, data = self.data_queue.get()
+                
+                if status == 'SUCCESS':
+                    text_block = context.space_data.text
+                    text_block.clear()
+                    text_block.write(data)
+                    self.report({'INFO'}, "Code fixed successfully!")
+                    self.cleanup(context)
+                    return {'FINISHED'}
+                
+                elif status == 'ERROR':
+                    self.report({'ERROR'}, data)
+                    self.cleanup(context)
+                    return {'CANCELLED'}
         
-        return {'FINISHED'}
-    
+        return {'RUNNING_MODAL'}
+
+    def invoke(self, context, event):
+        text_block = context.space_data.text
+        self.original_text = text_block.as_string()
+        
+        if not self.execute_code(context):
+            self.report({'INFO'}, "No errors detected")
+            return {'FINISHED'}
+        
+        self.is_running = True
+        threading.Thread(target=self.send_to_deepseek, args=(context,)).start()
+        
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        
+        self.report({'INFO'}, "Analyzing errors with DeepSeek...")
+        return {'RUNNING_MODAL'}
+
+    def cleanup(self, context):
+        wm = context.window_manager
+        if self._timer:
+            wm.event_timer_remove(self._timer)
+        self._timer = None
+
     def clean_response(self, response):
         return re.sub(r'```\w*\s*', '', response).strip()

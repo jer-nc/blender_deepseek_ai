@@ -12,6 +12,7 @@ class DeepSeekPreferences(bpy.types.AddonPreferences, DeepSeekProperties):
         layout.prop(self, "api_key")
         layout.prop(self, "api_url")
         layout.prop(self, "model_name")
+        layout.prop(self, "model_name_fix_errors")
         
         layout.separator()
         layout.label(text="Generation Parameters:")
