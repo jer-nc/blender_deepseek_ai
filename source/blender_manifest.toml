@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "ai_deepseek_text_editor"
-version = "1.0.2"
+version = "1.0.3"
 name = "Autocomplete Deepseek - Text Editor with AI"
 tagline = "Autocomplete Deepseek - Text Editor with AI"
 maintainer = "Jer NC"

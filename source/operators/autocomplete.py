@@ -5,6 +5,7 @@ from bpy.types import Operator
 import threading
 from queue import Queue
 import json
+import os
 
 class DEEPSEEK_OT_AutoComplete(Operator):
     bl_idname = "text.deepseek_autocomplete"
@@ -96,10 +97,23 @@ class DEEPSEEK_OT_AutoComplete(Operator):
             addon_path = '.'.join(__name__.split('.')[:-2])
             prefs = context.preferences.addons[addon_path].preferences
             
+            print(f"Starting API request to: {prefs.api_url}")
+
+            # Verify API key and URL settings before making the request
+            if prefs.api_url.startswith("https://api.openai.com"):
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    raise ValueError("OpenAI API key not found in environment variables")
+                auth_header = f"Bearer {api_key}"
+            else:
+                auth_header = f"Bearer {prefs.api_key}"
+
+
             response = requests.post(
                 prefs.api_url,
                 headers={
-                    "Authorization": f"Bearer {prefs.api_key}",
+                    # "Authorization": f"Bearer {prefs.api_key}",
+                    "Authorization": auth_header,
                     "Content-Type": "application/json"
                 },
                 json={
@@ -119,12 +133,21 @@ class DEEPSEEK_OT_AutoComplete(Operator):
                 stream=True
             )
 
+            # Check HTTP response status
+            if response.status_code != 200:
+                print(f"API error: Code {response.status_code} - {response.text}")
+                self.data_queue.put(('error', f"HTTP Error {response.status_code}"))
+                return
+
+            print("Streaming connection successfully established")
+            
             for line in response.iter_lines():
                 if line:
                     decoded_line = line.decode('utf-8')
                     if decoded_line.startswith('data:'):
                         data = decoded_line[5:].strip()
                         if data == '[DONE]':
+                            print("Stream successfully completed")
                             self.data_queue.put(('done', None))
                             break
                         try:
@@ -141,13 +164,26 @@ class DEEPSEEK_OT_AutoComplete(Operator):
                             if response_content.strip():
                                 self.data_queue.put(('content', self.response_buffer))
                                 
-                        except json.JSONDecodeError:
-                            pass
+                        except json.JSONDecodeError as e:
+                            print(f"Error decoding JSON: {e}\nReceived data: {decoded_line}")
+                            self.data_queue.put(('error', "Invalid JSON response"))
+                        except KeyError as e:
+                            print(f"Unexpected response structure: {e}\nData: {chunk}")
+                            self.data_queue.put(('error', "Invalid response format"))
 
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Connection error: {str(e)}"
+            print(error_msg)
+            self.data_queue.put(('error', error_msg))
         except Exception as e:
-            self.data_queue.put(('error', str(e)))
+            error_msg = f"Unexpected error: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            self.data_queue.put(('error', error_msg))
         finally:
             self.stream_active = False
+            print("Stream ended")
 
     def modal(self, context, event):
         if event.type == 'TIMER':
@@ -161,7 +197,6 @@ class DEEPSEEK_OT_AutoComplete(Operator):
                 full_text = self.original_text + "\n\n"
                 
                 if self.reasoning_buffer:
-                    # Converts reasoning to a list of lines, comments non-commented lines, and joins them back
                     reasoning_lines = self.reasoning_buffer.split('\n')
                     commented_reasoning = '\n'.join([f"# {line}" if not line.startswith('#') else line 
                                                     for line in reasoning_lines if line.strip()])
@@ -181,6 +216,7 @@ class DEEPSEEK_OT_AutoComplete(Operator):
                     self.cleanup(context)
                     return {'FINISHED'}
                 elif data_type == 'error':
+                    print(f"Error during generation: {data}")
                     self.report({'ERROR'}, data)
                     self.cleanup(context)
                     return {'CANCELLED'}
