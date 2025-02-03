@@ -103,7 +103,7 @@ class DEEPSEEK_OT_AutoComplete(Operator):
             if prefs.api_url.startswith("https://api.openai.com"):
                 api_key = os.getenv("OPENAI_API_KEY")
                 if not api_key:
-                    raise ValueError("La variable de entorno OPENAI_API_KEY no está definida")
+                    raise ValueError("OpenAI API key not found in environment variables")
                 auth_header = f"Bearer {api_key}"
             else:
                 auth_header = f"Bearer {prefs.api_key}"
